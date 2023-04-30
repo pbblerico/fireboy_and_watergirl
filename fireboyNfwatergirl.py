@@ -95,6 +95,7 @@ class Level():
     def __init__(self,id, level_info):
         self.id = id
         self.tile_list = []
+        self.blocks = []
         self.level_info = level_info
         self.jam_taken = False
         map = level_info.get("map")
@@ -102,6 +103,9 @@ class Level():
         wall_img = pg.image.load('res/wall.png')
         # border_img = pg.image.load('res/wall_2.png')
         stone = pg.image.load('res/stone_with_grass.png')
+        lava = pg.image.load('res/lava.png')
+        water = pg.image.load('res/water.png')
+        toxic = pg.image.load('res/toxic.png')
 
         fire_pos = []
         water_pos = []
@@ -112,11 +116,26 @@ class Level():
                 if tile == 1:
                     img = load_img_and_shape(wall_img, tile_size, tile_size, row * tile_size, col * tile_size)
                 elif tile == 2:
-                    img = load_img_and_shape(stone, tile_size, tile_size, row * tile_size, col * tile_size)
+                    img = load_img_and_shape(stone, tile_size, tile_size//2, row * tile_size, col * tile_size+tile_size//2)
                 elif tile == 3:
-                    fire_pos = [row, col]
+                    fire_pos = [row, col+0.6]
                 elif tile == 4:
-                    water_pos = [row, col]
+                    water_pos = [row, col+0.6]
+                elif tile == 5:
+                    img = load_img_and_shape(lava, tile_size, tile_size//4, row * tile_size, col * tile_size+tile_size//2)
+                    self.blocks.append([5, img])
+                    img = load_img_and_shape(wall_img, tile_size, tile_size//4, row * tile_size, col * tile_size+tile_size//4*3)
+                elif tile == 6:
+                    img = load_img_and_shape(water, tile_size, tile_size//4, row * tile_size, col * tile_size+tile_size//2)
+                    self.blocks.append([6, img])
+                    img = load_img_and_shape(wall_img, tile_size, tile_size//4, row * tile_size, col * tile_size+tile_size//4*3)
+                elif tile == 7:
+                    img = load_img_and_shape(stone, tile_size, tile_size//2, row * tile_size, col * tile_size+tile_size//2)
+                elif tile == 8:
+                    img = load_img_and_shape(toxic, tile_size, tile_size//4, row * tile_size, col * tile_size+tile_size//2)
+                    self.blocks.append([8, img])
+                    img = load_img_and_shape(wall_img, tile_size, tile_size//4, row * tile_size, col * tile_size+tile_size//4*3)
+
 
                 self.tile_list.append(img)
         self.doors = Doors(fire_pos, water_pos)
@@ -126,6 +145,8 @@ class Level():
         for tile in self.tile_list:
             screen.blit(tile[0], tile[1])
             # pg.draw.rect(screen, (255, 255, 255), tile[1], 2)
+        for block in self.blocks:
+            screen.blit(block[1][0], block[1][1])
         self.doors.draw()
 
 class Player():
@@ -234,12 +255,13 @@ class Game():
         self.time = Clock(start_time)
         self.level = level
         self.score = 0
+        self.game_complited = False
         self.finished = [False, False]
         self.fireboy = Player('res/fireboy.png', tile_size, tile_size, tile_size * fireboy_coordinates[0], tile_size * fireboy_coordinates[1], fireboy_moving_keys)
         self.watergirl = Player('res/watergirl.png', tile_size, tile_size, tile_size * watergirl_coordinates[0], tile_size * watergirl_coordinates[1], watergirl_moving_keys)
     
     def draw(self):
-        global pause, level_fin
+        global pause, level_fin, game_started, lost
 
         self.level.draw()
         self.time.draw()
@@ -248,6 +270,16 @@ class Game():
         if pause_btn.draw() and pause == False:
             # self.time.paused_time = pg.time.get_ticks()
             pause = True
+
+        for block in self.level.blocks:
+            if self.fireboy.rect.colliderect(block[1][1]):
+                if(block[0] == 6 or block[0] == 8): 
+                    game_started = False
+                    lost = True
+            if self.watergirl.rect.colliderect(block[1][1]):
+                if(block[0] == 5 or block[0] == 8): 
+                    game_started = False
+                    lost = True
 
         if self.fireboy.rect.colliderect(self.level.doors.fire[1]):
             self.level.doors.fire = self.level.doors.opened_door(self.level.doors.fire)
@@ -266,10 +298,14 @@ class Game():
             self.fireboy.upd()
             self.watergirl.upd()
         
-        if self.finished[0] == self.finished[1] == True:
+        if self.finished[0] == self.finished[1] == True and not self.level.id == 2:
             pg.time.wait(2000)
             pause = True
             level_fin = True
+        elif self.finished[0] == self.finished[1] == True and self.level.id == 2:
+            
+            game_complited()
+
 
 
 #creates rectangle of the given text and returns tuple of text itself and the rect
@@ -281,6 +317,23 @@ def create_text_shape(text: str, font: pg.font.Font, color: tuple, centerx: int,
 
 
 tile_size = 40
+
+def game_complited():
+    global pause, level_fin, game_started, level_one_completed
+    save(game.score, game.level.id, game.fireboy.rect.x//tile_size, game.fireboy.rect.y//tile_size, game.level.jam_taken, game.watergirl.rect.x//2, game.watergirl.rect.y//tile_size, game.finished[0] and game.finished[1], game.time.minutes * 60 + game.time.seconds)   
+    level_finished_text = create_text_shape("GAME FINISHED", font1, YELLOW, size[0]//2, size[1]//3)
+    evel_finished_text = create_text_shape("CONGRATS!", font1, YELLOW, size[0]//2, size[1]//3+50)
+    continue_button = Button(create_text_shape("GO BACK", font2, YELLOW, size[0]//2, size[1]-50))
+
+    if continue_button.draw():
+        pause = False
+        # level_fin = False
+        start_menu = True
+        game_started = False
+        level_one_completed = True
+        pass
+
+    screen.blit(level_finished_text[0], level_finished_text[1])
 
 #loads image and creates rectangle of the given text and returns tuple of text image and the rect
 def load_img_and_shape(image: pg.surface.Surface, size_x: int, size_y: int, pos_x: int, pos_y: int, center: bool = False):
@@ -299,7 +352,7 @@ def load_img_and_shape(image: pg.surface.Surface, size_x: int, size_y: int, pos_
 fireboy_moving_keys = [pg.K_UP, pg.K_DOWN, pg.K_LEFT, pg.K_RIGHT]
 watergirl_moving_keys = [pg.K_w, pg.K_s, pg.K_a, pg.K_d]
 # lvl_1 = Level(level_one)
-levels = [Level(1,level_one)]
+levels = [Level(1,level_one), Level(2,level_two)]
 
 #booleans which monitor the state of app 
 run = True
@@ -310,6 +363,17 @@ pause = False
 safe_win = False
 savedGame = False
 level_fin = False
+lost = False
+
+def reset():
+    global game_started, pause, safe_win, savedGame, level_fin, lost
+    game_started = False
+    pause = False
+    safe_win = False
+    savedGame = False
+    level_fin = False
+    lost = False
+
 
 
 def welcome():
@@ -339,13 +403,16 @@ def welcome():
     screen.blit(and_text[0], and_text[1])
 
 def level_finished():
-    global pause, level_fin
-    save(game.score, game.level.id, game.fireboy.rect.x//tile_size, game.fireboy.rect.y//tile_size, game.level.jam_taken, game.watergirl.rect.x//tile_size, game.watergirl.rect.y//tile_size, game.finished[0] and game.finished[1], game.time.minutes * 60 + game.time.seconds)   
+    global pause, level_fin, game_started, level_one_completed
+    save(game.score, game.level.id, game.fireboy.rect.x//tile_size, game.fireboy.rect.y//tile_size, game.level.jam_taken, game.watergirl.rect.x//2, game.watergirl.rect.y//tile_size, game.finished[0] and game.finished[1], game.time.minutes * 60 + game.time.seconds)   
     level_finished_text = create_text_shape("Level finished", font1, YELLOW, size[0]//2, size[1]//3)
     continue_button = Button(create_text_shape("CONTINUE", font2, YELLOW, size[0]//2, size[1]-50))
 
     if continue_button.draw():
-        print('yay')
+        pause = False
+        # level_fin = False
+        game_started = False
+        level_one_completed = True
         pass
 
     screen.blit(level_finished_text[0], level_finished_text[1])
@@ -354,7 +421,7 @@ def level_finished():
 
 
 def main_menu():
-    global level_one_completed, game_started, game
+    global level_one_completed, game_started, game, start_menu
     level_one_button = Button(create_text_shape("Level 1", font1, YELLOW, size[0]//2, size[1]//3))
 
     level_two_color = YELLOW if level_one_completed else DARK_YELLOW
@@ -363,13 +430,18 @@ def main_menu():
     continue_color = YELLOW if level_one_completed else DARK_YELLOW
     continue_button = Button(create_text_shape("CONTINUE", font2, continue_color, size[0]//2, size[1]-50))
 
+    go_back = Button(load_img_and_shape(go_back_img, tile_size, tile_size, tile_size//2, tile_size//2, True))
+
     if level_one_button.draw():
         game = Game(levels[0], levels[0].level_info.get("fireboy_coordinates"), levels[0].level_info.get("watergirl_coordinates"), pg.time.get_ticks())
         game_started = True
     if level_two_button.draw() and level_one_completed:
-        pass
+        game = Game(levels[1], levels[1].level_info.get("fireboy_coordinates"), levels[1].level_info.get("watergirl_coordinates"), pg.time.get_ticks())
+        game_started = True
     if continue_button.draw() and level_one_completed:
         pass
+    if go_back.draw():
+        start_menu = True
 
 def game_paused():
     global pause, safe_win
@@ -411,6 +483,21 @@ def save_game():
     if go_back.draw():
         safe_win = False
 
+def game_over(game_lvl):
+    global lost, game_started, pause, game
+
+    over_text = create_text_shape("GAME OVER", font1, YELLOW, size[0]//2, size[1]//4)
+    go_back_button = Button(create_text_shape("GO BACK", font2, YELLOW, over_text[1].centerx, size[1]//2))
+    new_game_button = Button(create_text_shape("NEW GAME", font2, YELLOW, over_text[1].centerx, go_back_button.rect.centery + 50))
+  
+    if go_back_button.draw():
+        lost = False
+    if new_game_button.draw():
+        game = Game(game_lvl, levels[0].level_info.get("fireboy_coordinates"), levels[0].level_info.get("watergirl_coordinates"), pg.time.get_ticks())
+        lost = False
+        game_started = True
+
+    screen.blit(over_text[0], over_text[1])
 
 game = Game(levels[0].level_info.get("map"), levels[0].level_info.get("fireboy_coordinates"), levels[0].level_info.get("watergirl_coordinates"), pg.time.get_ticks())
 
@@ -431,13 +518,16 @@ while(run):
 
 
     if start_menu:
+        reset()
         welcome()
-    elif game_started == False:
+    elif game_started == False and not lost:
         main_menu()
     elif game_started and not pause:
         game.draw()
-    elif pause and not safe_win and not level_fin:
+    elif pause and not safe_win and not level_fin and not lost:
         game_paused()
+    elif lost:
+        game_over(game.level)
     elif level_fin:
         level_finished()
     elif safe_win:
