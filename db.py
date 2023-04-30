@@ -44,8 +44,6 @@ def create_table():
         )
     '''
     cur.execute(create_best)
-
-    # cur = conn.cursor()
     
     cur.close()
     conn.commit()

@@ -49,16 +49,19 @@ class Button():
         #returns state of the button, if activated action will be performed later
         return action
     
+
 class Clock():
     def __init__(self, start_time):
         self.start_time = start_time
+        self.minutes = 0
+        self.seconds = 0
         self.paused_time = 0
 
     def to_clock(self, time_passed):
-        mins = time_passed//60
-        secs = time_passed%60
+        self.minutes = time_passed//60
+        self.seconds = time_passed%60
 
-        return (mins, secs)
+        return (self.minutes, self.seconds)
 
     def draw(self):     
         elapsed_time = (pg.time.get_ticks() - self.start_time) // 1000
@@ -68,7 +71,25 @@ class Clock():
         timer = create_text_shape(time_txt, font2, YELLOW, size[0]//2, tile_size//2)
         screen.blit(timer[0], timer[1])
 
+class Doors():
+    def __init__(self, fire_pos, water_pos):
+        self.water = load_img_and_shape(pg.image.load('res/water_door.png'), tile_size, tile_size, water_pos[0] * tile_size, water_pos[1] * tile_size)
+        self.fire = load_img_and_shape(pg.image.load('res/fire_door.png'), tile_size, tile_size, fire_pos[0] * tile_size, fire_pos[1] * tile_size)
+    
+    def opened_door(self, door):
+        door = load_img_and_shape(pg.image.load('res/opened_water.png'), tile_size, tile_size, door[1].x, door[1].y)
+        return door
+    
+    def closed_door(self, door, img_path):
+        door = load_img_and_shape(pg.image.load(img_path), tile_size, tile_size, door[1].x, door[1].y)
+        return door
 
+    def draw(self):
+        screen.blit(self.water[0], self.water[1])
+        screen.blit(self.fire[0], self.fire[1])
+
+# class Block():
+    
 
 class Level():
     def __init__(self,id, level_info):
@@ -82,6 +103,8 @@ class Level():
         # border_img = pg.image.load('res/wall_2.png')
         stone = pg.image.load('res/stone_with_grass.png')
 
+        fire_pos = []
+        water_pos = []
         for row in range(len(map)):
             for col in range(len(map[0])):
                 tile = map[row][col]
@@ -90,14 +113,20 @@ class Level():
                     img = load_img_and_shape(wall_img, tile_size, tile_size, row * tile_size, col * tile_size)
                 elif tile == 2:
                     img = load_img_and_shape(stone, tile_size, tile_size, row * tile_size, col * tile_size)
+                elif tile == 3:
+                    fire_pos = [row, col]
+                elif tile == 4:
+                    water_pos = [row, col]
 
                 self.tile_list.append(img)
+        self.doors = Doors(fire_pos, water_pos)
 
 
     def draw(self):
         for tile in self.tile_list:
             screen.blit(tile[0], tile[1])
             # pg.draw.rect(screen, (255, 255, 255), tile[1], 2)
+        self.doors.draw()
 
 class Player():
     def __init__(self, img_path: str, size_x: int, size_y: int, pos_x: int, pos_y: int, moving_keys: list):
@@ -113,15 +142,25 @@ class Player():
         self.vel_x_max = 1.5
         self.vel_x_min = -2
         self.acceleration = 0.2
+        self.in_air = False
         self.jumped = False
+        self.gravity = 0.1
+        self.jump_velocity = -5
 
     def move(self):
         keys = pg.key.get_pressed()
         if keys[self.moving_keys[0]] and self.jumped == False:
-            self.vel_y = -15
+            self.vel_y =self.jump_velocity
+            self.jump_velocity += self.gravity
+            self.jump_velocity = min(0, self.jump_velocity)
             self.jumped = True
+            self.in_air = True
+        # if keys[self.moving_keys[0]] and self.jumped == True:
+        #     return
         if keys[self.moving_keys[0]] == False:
+            self.jump_velocity = -5 #resets jump velocity
             self.jumped = False
+            self.in_air = False
 
         if keys[self.moving_keys[3]] != keys[self.moving_keys[2]]:
             if keys[self.moving_keys[3]]:
@@ -134,18 +173,57 @@ class Player():
             else:
                 self.vel_x = min(round(self.vel_x, 2) + self.acceleration, 0)
 
-    def update(self):
-        self.move()
+    def upd(self):
+        dx = 0
+        dy = 0
+        # walk_cooldown = 5
 
-        self.vel_x = min(max(self.vel_x, self.vel_x_min), self.vel_x_max)
+		#get keypresses
+        key = pg.key.get_pressed()
+        if key[self.moving_keys[0]] and self.jumped == False:
+            self.vel_y = -5
+            self.jumped = True
+        if key[self.moving_keys[0]] == False:
+            self.jumped = False
+        if key[self.moving_keys[2]]:
+            dx -= 2
+            # self.counter += 1
+            self.direction = -1
+        if key[self.moving_keys[3]]:
+            dx += 2
 
-        self.rect.x += self.vel_x
+		#add gravity
+        self.vel_y += 0.1
+        if self.vel_y > 10:
+            self.vel_y = 10
+        dy += self.vel_y
 
-        self.rect.x = max(0, self.rect.x)
-        self.rect.x = min(self.rect.x, size[0] - self.width)
-        print(self.rect.x//tile_size)
+		#check for collision
+        for tile in game.level.tile_list:
+			#check for collision in x direction
+            if tile[1].colliderect(self.rect.x + dx, self.rect.y, self.width, self.height):
+                dx = 0
+			#check for collision in y direction
+            if tile[1].colliderect(self.rect.x, self.rect.y + dy, self.width, self.height):
+				#check if below the ground i.e. jumping
+                if self.vel_y < 0:
+                    dy = tile[1].bottom - self.rect.top
+                    self.vel_y = 0
+				#check if above the ground i.e. falling
+                elif self.vel_y >= 0:
+                    dy = tile[1].top - self.rect.bottom
+                    self.vel_y = 0
 
-        self.draw()
+		#update player coordinates
+        self.rect.x += dx
+        self.rect.y += dy
+
+        if self.rect.bottom > size[1]:
+            self.rect.bottom = size[1]
+            dy = 0
+
+		#draw player onto screen
+        screen.blit(self.img, self.rect)
 
     def draw(self):
         screen.blit(self.img, self.rect)
@@ -156,12 +234,12 @@ class Game():
         self.time = Clock(start_time)
         self.level = level
         self.score = 0
-        self.finished = False
+        self.finished = [False, False]
         self.fireboy = Player('res/fireboy.png', tile_size, tile_size, tile_size * fireboy_coordinates[0], tile_size * fireboy_coordinates[1], fireboy_moving_keys)
         self.watergirl = Player('res/watergirl.png', tile_size, tile_size, tile_size * watergirl_coordinates[0], tile_size * watergirl_coordinates[1], watergirl_moving_keys)
     
     def draw(self):
-        global pause
+        global pause, level_fin
 
         self.level.draw()
         self.time.draw()
@@ -171,9 +249,27 @@ class Game():
             # self.time.paused_time = pg.time.get_ticks()
             pause = True
 
+        if self.fireboy.rect.colliderect(self.level.doors.fire[1]):
+            self.level.doors.fire = self.level.doors.opened_door(self.level.doors.fire)
+            self.finished[0] = True
+            # print("finished")
+        else:
+            self.finished[0] = False
+            self.level.doors.fire = self.level.doors.closed_door(self.level.doors.fire, 'res/fire_door.png')
+        if self.watergirl.rect.colliderect(self.level.doors.water[1]):
+            self.level.doors.water = self.level.doors.opened_door(self.level.doors.water)
+            self.finished[1] = True
+        else:
+            self.level.doors.water = self.level.doors.closed_door(self.level.doors.water, 'res/water_door.png')
+            self.finished[1] = False
         if pause == False:
-            self.fireboy.update()
-            self.watergirl.update()
+            self.fireboy.upd()
+            self.watergirl.upd()
+        
+        if self.finished[0] == self.finished[1] == True:
+            pg.time.wait(2000)
+            pause = True
+            level_fin = True
 
 
 #creates rectangle of the given text and returns tuple of text itself and the rect
@@ -213,6 +309,7 @@ game_started = False
 pause = False
 safe_win = False
 savedGame = False
+level_fin = False
 
 
 def welcome():
@@ -240,6 +337,20 @@ def welcome():
     screen.blit(fireboy_text[0], fireboy_text[1])
     screen.blit(watergirl_text[0], watergirl_text[1])
     screen.blit(and_text[0], and_text[1])
+
+def level_finished():
+    global pause, level_fin
+    save(game.score, game.level.id, game.fireboy.rect.x//tile_size, game.fireboy.rect.y//tile_size, game.level.jam_taken, game.watergirl.rect.x//tile_size, game.watergirl.rect.y//tile_size, game.finished[0] and game.finished[1], game.time.minutes * 60 + game.time.seconds)   
+    level_finished_text = create_text_shape("Level finished", font1, YELLOW, size[0]//2, size[1]//3)
+    continue_button = Button(create_text_shape("CONTINUE", font2, YELLOW, size[0]//2, size[1]-50))
+
+    if continue_button.draw():
+        print('yay')
+        pass
+
+    screen.blit(level_finished_text[0], level_finished_text[1])
+
+
 
 
 def main_menu():
@@ -285,9 +396,9 @@ def save_game():
 
     screen.blit(save_text[0], save_text[1])
     if yes_button.draw():
-        save(game.score, game.level.id, game.fireboy.rect.x//tile_size, game.fireboy.rect.y//tile_size, game.level.jam_taken, game.watergirl.rect.x//tile_size, game.watergirl.rect.y//tile_size, game.finished, 100)
+        # time = game.time.to_clock(pg.time.get_ticks() - game.time.start_time // 1000)
+        save(game.score, game.level.id, game.fireboy.rect.x//tile_size, game.fireboy.rect.y//tile_size, game.level.jam_taken, game.watergirl.rect.x//tile_size, game.watergirl.rect.y//tile_size, game.finished[0] and game.finished[1], game.time.minutes * 60 + game.time.seconds)
         game_started = False
-
         safe_win = False
         pause = False
         start_menu = True
@@ -325,8 +436,10 @@ while(run):
         main_menu()
     elif game_started and not pause:
         game.draw()
-    elif pause and not safe_win:
+    elif pause and not safe_win and not level_fin:
         game_paused()
+    elif level_fin:
+        level_finished()
     elif safe_win:
         save_game()
 
