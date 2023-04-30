@@ -1,6 +1,7 @@
 import pygame as pg
 from colors import *
 from levels import *
+from db import *
 
 #initializing py game
 pg.init()
@@ -70,9 +71,11 @@ class Clock():
 
 
 class Level():
-    def __init__(self, level_info):
+    def __init__(self,id, level_info):
+        self.id = id
         self.tile_list = []
         self.level_info = level_info
+        self.jam_taken = False
         map = level_info.get("map")
 
         wall_img = pg.image.load('res/wall.png')
@@ -82,7 +85,7 @@ class Level():
         for row in range(len(map)):
             for col in range(len(map[0])):
                 tile = map[row][col]
-                print(row, col, map[row][col])
+                # print(row, col, map[row][col])
                 if tile == 1:
                     img = load_img_and_shape(wall_img, tile_size, tile_size, row * tile_size, col * tile_size)
                 elif tile == 2:
@@ -140,6 +143,7 @@ class Player():
 
         self.rect.x = max(0, self.rect.x)
         self.rect.x = min(self.rect.x, size[0] - self.width)
+        print(self.rect.x//tile_size)
 
         self.draw()
 
@@ -151,6 +155,8 @@ class Game():
     def __init__(self, level: Level, fireboy_coordinates, watergirl_coordinates, start_time):
         self.time = Clock(start_time)
         self.level = level
+        self.score = 0
+        self.finished = False
         self.fireboy = Player('res/fireboy.png', tile_size, tile_size, tile_size * fireboy_coordinates[0], tile_size * fireboy_coordinates[1], fireboy_moving_keys)
         self.watergirl = Player('res/watergirl.png', tile_size, tile_size, tile_size * watergirl_coordinates[0], tile_size * watergirl_coordinates[1], watergirl_moving_keys)
     
@@ -197,7 +203,7 @@ def load_img_and_shape(image: pg.surface.Surface, size_x: int, size_y: int, pos_
 fireboy_moving_keys = [pg.K_UP, pg.K_DOWN, pg.K_LEFT, pg.K_RIGHT]
 watergirl_moving_keys = [pg.K_w, pg.K_s, pg.K_a, pg.K_d]
 # lvl_1 = Level(level_one)
-levels = [Level(level_one)]
+levels = [Level(1,level_one)]
 
 #booleans which monitor the state of app 
 run = True
@@ -279,7 +285,13 @@ def save_game():
 
     screen.blit(save_text[0], save_text[1])
     if yes_button.draw():
-        pass
+        save(game.score, game.level.id, game.fireboy.rect.x//tile_size, game.fireboy.rect.y//tile_size, game.level.jam_taken, game.watergirl.rect.x//tile_size, game.watergirl.rect.y//tile_size, game.finished, 100)
+        game_started = False
+
+        safe_win = False
+        pause = False
+        start_menu = True
+        # pass
     if no_button.draw():
         game_started = False
         safe_win = False
@@ -297,6 +309,7 @@ wall_img = pg.image.load('res/wall.png')
 border_img = pg.image.load('res/wall_2.png')
 stone = pg.image.load('res/stone_with_grass.png')
 
+create_table()
 
 while(run):
     for i in pg.event.get():
@@ -304,6 +317,8 @@ while(run):
             run = False
 
     screen.fill(BLACK)
+
+
     if start_menu:
         welcome()
     elif game_started == False:
@@ -314,17 +329,6 @@ while(run):
         game_paused()
     elif safe_win:
         save_game()
-        # game.draw()
-        # screen.fill(pg.Color(0, 0, 0, 128))
-#         # drawGrid()
-#         lvl1.draw()
-#         # drawPause()
-#         showTimer()
-#         fireboy.update()
-#         watergirl.update()
-# #
-#     if(pause == True):
-#         print(pause)
 
     # Update the display
     pg.display.update()
